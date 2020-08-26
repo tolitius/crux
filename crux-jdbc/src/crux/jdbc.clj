@@ -30,6 +30,8 @@
 
 (defmulti setup-schema! (fn [dbtype ds] (dbtype->crux-jdbc-dialect dbtype)))
 
+(defmulti insert-batch! (fn [dbtype ds topic batch] (dbtype->crux-jdbc-dialect dbtype)))
+
 (defmulti prep-for-tests! (fn [dbtype ds] (dbtype->crux-jdbc-dialect dbtype)))
 
 (defmethod prep-for-tests! :default [_ ds] (jdbc/execute! ds ["DROP TABLE IF EXISTS tx_events"]))
@@ -89,16 +91,9 @@
 (defrecord JdbcDocumentStore [ds dbtype]
   db/DocumentStore
   (submit-docs [this id-and-docs]
-    (jdbc/with-transaction [tx ds]
-      (doseq [[id doc] id-and-docs
-              :let [id (str id)]]
-        (if (c/evicted-doc? doc)
-          (do
-            (insert-event! tx id doc "docs")
-            (evict-doc! tx id doc))
-          (if-not (doc-exists? tx id)
-            (insert-event! tx id doc "docs")
-            (update-doc! tx id doc))))))
+    ;; TODO: (!) this does not yet handle evictions
+    ;;           group by c/evicted-doc? and update evicted in a separate batch
+    (insert-batch! dbtype ds "docs" id-and-docs))
 
   (fetch-docs [this ids]
     (->> (for [id-batch (partition-all 100 ids)
