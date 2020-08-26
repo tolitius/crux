@@ -18,9 +18,8 @@
   ;                           add constraint event_key_uq unique (event_key)"])  ;;      so this runs for the first time, but needs a DB fn or two queries after that
   )
 
-(defn make-insert-batch-query [topic batch]
-  (let [qhead "insert into tx_events (event_key, v, topic, compacted) values "
-        rows (->> (for [[id doc] batch]
+(defn- make-insert-batch-query [topic batch]
+  (let [rows (->> (for [[id doc] batch]
                     [(str id) (nippy/freeze doc) topic 0])
                   (into []))
         [qhead & data] (qb/for-insert-multi :tx_events
